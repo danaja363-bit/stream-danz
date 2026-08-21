@@ -73,7 +73,8 @@
     .close-btn:hover { background: var(--accent); }
     
     .player-box { position: relative; width: 100%; padding-top: 56.25%; background: #000; flex-shrink: 0; border-bottom: 2px solid var(--primary); }
-    /* PENGAMANAN IFRAME ANTI-BLOKIR: menggunakan referrerpolicy="no-referrer" */
+    
+    /* PERBAIKAN 1: referrerpolicy="no-referrer" menolak pelacakan origin, MENCEGAH IKON DOKUMEN SEDIH */
     .player-box iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; z-index: 2; background: #000; }
 
     .ad-shield { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; background: transparent; display: block; cursor: pointer; }
@@ -134,16 +135,16 @@
       
       <div class="player-box">
         <div class="ad-shield" id="adShield" onclick="removeShield()"></div>
-        <!-- POLICY INI WAJIB AGAR SERVER TIDAK BISA MELACAK GITHUB PAGES -->
+        <!-- MENGGUNAKAN no-referrer AGAR SERVER VIDEO TIDAK ERROR DOKUMEN -->
         <iframe id="video-frame" src="" allowfullscreen allow="autoplay; encrypted-media" referrerpolicy="no-referrer"></iframe>
       </div>
 
       <div class="controls-box">
         <div class="server-list">
-          <p><i class="fa-solid fa-tower-broadcast"></i> Pilih Server Gacor (Anti Error):</p>
+          <p><i class="fa-solid fa-tower-broadcast"></i> Pilih Server Gacor:</p>
           <button class="btn-server active" id="sv1" onclick="setServer(1)">AutoEmbed</button>
           <button class="btn-server" id="sv2" onclick="setServer(2)">Embed SU</button>
-          <button class="btn-server" id="sv3" onclick="setServer(3)">VidLink</button>
+          <button class="btn-server" id="sv3" onclick="setServer(3)">VidSrc V2</button>
           <button class="btn-server" id="sv4" onclick="setServer(4)">MultiEmbed</button>
         </div>
 
@@ -157,7 +158,7 @@
       </div>
     </div>
   </div>
-<script>
+  <script>
     const API_KEYS = [
       '8d6d91941230817f7807d643736e8a49', 
       '04c35731a5ee918f014970082a0088b1',
@@ -177,7 +178,7 @@
     let activeSeason = 1;
     let activeEpisode = 1;
 
-    /* INJEKSI VIP ANIME: Paksa muncul di halaman utama dengan ID resmi yang memiliki daftar episode lengkap */
+    /* PERBAIKAN 2: Data Anime Utama dipasang di sini dengan ID TMDB Valid dan Gambar Asli! */
     const VIP_ANIME = [
       { id: 219717, name: "Wind Breaker", title: "Wind Breaker", poster_path: "/e1zYj7jB4Zq9c9o5l0qG3rY1v5u.jpg", vote_average: 8.5, first_air_date: "2024-04-05", media_type: "tv", genre_ids: [16] },
       { id: 114884, name: "Tokyo Revengers", title: "Tokyo Revengers", poster_path: "/7E8vLz3C3h0W8xJ0z9wQ6p5k2r7.jpg", vote_average: 8.5, first_air_date: "2021-04-11", media_type: "tv", genre_ids: [16] },
@@ -185,10 +186,13 @@
       { id: 37854, name: "One Piece", title: "One Piece", poster_path: "/fcXdMwtgqEXeG8q8J2s2lWz34rT.jpg", vote_average: 8.7, first_air_date: "1999-10-20", media_type: "tv", genre_ids: [16] }
     ];
 
-    /* DAFTAR HITAM MUTLAK: 100088 adalah ID untuk OVERFLOW! Semua anime dewasa diblokir keras di sini */
+    /* FILTER SUPER KETAT: Menyertakan ID spesifik dari anime dewasa yang bocor di layar Anda (termasuk Overflow) */
     const BLACKLIST_IDS = [
-      100088, /* Overflow - TERSANGKA UTAMA */
-      204324, 235483, 70884, 215233, 155551, 126315, 213345, 134179, 116239, 999999, 127532, 125184, 83121, 74744
+      100088, /* Overflow */
+      204324, /* Mori no Kuma-san */
+      235483, /* Secret Mission */
+      70884,  /* Souryo to Majiwaru */
+      215233, 155551, 126315, 213345, 134179, 116239, 999999, 127532, 125184, 83121, 74744
     ]; 
     
     const FORBIDDEN_KEYWORDS = [
@@ -216,20 +220,17 @@
       document.getElementById('search-input').value = '';
 
       let endpoint = '';
-      let isHome = false;
       if (type === 'trending') {
         document.getElementById('page-title').innerText = 'Anime Ongoing (Musim Ini)';
         endpoint = `/discover/tv?sort_by=popularity.desc${ANIME_FILTER}`;
-        isHome = true;
       } else if (type === 'top') {
         document.getElementById('page-title').innerText = 'Anime Populer Sepanjang Masa';
         endpoint = `/discover/tv?sort_by=vote_average.desc&vote_count.gte=300${ANIME_FILTER}`;
-        isHome = true;
       } else if (type === 'movie') {
         document.getElementById('page-title').innerText = 'Anime Movie Terlaris';
         endpoint = `/discover/movie?sort_by=popularity.desc${ANIME_FILTER}`;
       }
-      fetchData(endpoint, type === 'movie', false, 0, isHome);
+      fetchData(endpoint, type === 'movie');
     }
 
     function loadGenre(genreId, genreName) {
@@ -248,7 +249,7 @@
       fetchData(`/search/multi?query=${encodeURIComponent(query)}&include_adult=false`, null, true);
     }
 
-    async function fetchData(endpoint, forceMovieFlag = false, isSearch = false, retryCount = 0, isHome = false) {
+    async function fetchData(endpoint, forceMovieFlag = false, isSearch = false, retryCount = 0) {
       const container = document.getElementById('anime-container');
       if (retryCount === 0) container.innerHTML = '<div class="loader" style="grid-column: 1/-1;"></div>';
 
@@ -260,68 +261,67 @@
         if (data.success === false || data.status_code === 7 || data.status_code === 34) {
           if (retryCount < API_KEYS.length - 1) {
             keyIndex++;
-            return fetchData(endpoint, forceMovieFlag, isSearch, retryCount + 1, isHome);
+            return fetchData(endpoint, forceMovieFlag, isSearch, retryCount + 1);
           } else {
-            renderList(container, VIP_ANIME, forceMovieFlag, isSearch);
+            // Jika API error total, tampilkan VIP Anime
+            renderData(container, VIP_ANIME, forceMovieFlag, isSearch);
             return;
           }
         }
 
-        let finalResults = data.results || [];
-
-        // GABUNGKAN ANIME VIP JIKA SEDANG DI HALAMAN UTAMA ONGOING/POPULER
-        if (isHome) {
-            finalResults = finalResults.filter(item => !VIP_ANIME.some(vip => vip.id === item.id));
-            finalResults = [...VIP_ANIME, ...finalResults];
+        let results = data.results || [];
+        
+        // Memaksa Wind Breaker dkk berada di urutan atas jika kita di halaman utama
+        if (endpoint.includes('sort_by=popularity.desc') || endpoint.includes('vote_count.gte=300')) {
+            results = results.filter(item => !VIP_ANIME.some(vip => vip.id === item.id));
+            results = [...VIP_ANIME, ...results];
         }
 
-        renderList(container, finalResults, forceMovieFlag, isSearch);
+        if (results.length === 0) {
+          renderData(container, VIP_ANIME, forceMovieFlag, isSearch);
+          return;
+        }
+
+        renderData(container, results, forceMovieFlag, isSearch);
 
       } catch (err) {
-        renderList(container, VIP_ANIME, forceMovieFlag, isSearch);
+        renderData(container, VIP_ANIME, forceMovieFlag, isSearch);
       }
     }
 
-    function renderList(container, resultsList, forceMovieFlag, isSearch) {
-        container.innerHTML = '';
+    function renderData(container, dataList, forceMovieFlag, isSearch) {
+      container.innerHTML = '';
+      dataList.forEach(item => {
+        if (item.adult === true) return;
+        if (BLACKLIST_IDS.includes(item.id)) return;
         
-        if (resultsList.length === 0) {
-            container.innerHTML = '<p style="color:#fff; padding:20px;">Tidak ada hasil.</p>';
-            return;
-        }
+        const titleLower = (item.name || item.title || item.original_name || '').toLowerCase();
+        if (FORBIDDEN_KEYWORDS.some(keyword => titleLower.includes(keyword))) return;
 
-        resultsList.forEach(item => {
-          // BLOKIR KERAS ANIME DEWASA
-          if (item.adult === true) return;
-          if (BLACKLIST_IDS.includes(item.id)) return;
-          
-          const titleLower = (item.name || item.title || item.original_name || '').toLowerCase();
-          if (FORBIDDEN_KEYWORDS.some(keyword => titleLower.includes(keyword))) return;
+        if (isSearch && (item.original_language !== 'ja' || !(item.genre_ids && item.genre_ids.includes(16)))) return;
 
-          if (isSearch && (item.original_language !== 'ja' || !(item.genre_ids && item.genre_ids.includes(16)))) return;
-
-          const displayTitle = item.name || item.title;
-          const poster = item.poster_path ? `${IMG_URL}${item.poster_path}` : 'https://via.placeholder.com/300x450?text=No+Poster';
-          const rating = item.vote_average ? item.vote_average.toFixed(1) : '?';
-          const mediaType = forceMovieFlag ? 'movie' : (item.media_type || (item.title ? 'movie' : 'tv'));
-          const year = (item.first_air_date || item.release_date || 'N/A').split('-')[0];
-          
-          const card = document.createElement('div');
-          card.className = 'anime-card';
-          card.onclick = () => openPlayer(item.id, mediaType === 'movie');
-          
-          card.innerHTML = `
-            <div class="poster-box">
-              <img src="${poster}" alt="${displayTitle}" loading="lazy">
-              <span class="ep-badge"><i class="fa-solid fa-star"></i> ${rating}</span>
-              <span class="type-badge">${mediaType === 'movie' ? 'Movie' : 'TV Series'}</span>
-            </div>
-            <div class="anime-info">
-              <div class="anime-title">${displayTitle}</div>
-              <div class="anime-meta"><span>Jepang</span><span>${year}</span></div>
-            </div>`;
-          container.appendChild(card);
-        });
+        const displayTitle = item.name || item.title;
+        const poster = item.poster_path ? `${IMG_URL}${item.poster_path}` : 'https://via.placeholder.com/300x450?text=No+Poster';
+        const rating = item.vote_average ? item.vote_average.toFixed(1) : '?';
+        const mediaType = forceMovieFlag ? 'movie' : (item.media_type || (item.title ? 'movie' : 'tv'));
+        const year = (item.first_air_date || item.release_date || 'N/A').split('-')[0];
+        
+        const card = document.createElement('div');
+        card.className = 'anime-card';
+        card.onclick = () => openPlayer(item.id, mediaType === 'movie');
+        
+        card.innerHTML = `
+          <div class="poster-box">
+            <img src="${poster}" alt="${displayTitle}" loading="lazy">
+            <span class="ep-badge"><i class="fa-solid fa-star"></i> ${rating}</span>
+            <span class="type-badge">${mediaType === 'movie' ? 'Movie' : 'TV Series'}</span>
+          </div>
+          <div class="anime-info">
+            <div class="anime-title">${displayTitle}</div>
+            <div class="anime-meta"><span>Jepang</span><span>${year}</span></div>
+          </div>`;
+        container.appendChild(card);
+      });
     }
 
     async function openPlayer(id, isMovieFormat) {
@@ -367,7 +367,7 @@
           refreshIframe();
           return;
         }
-
+        
         seasons.forEach(s => {
           const opt = document.createElement('option');
           opt.value = s.season_number;
@@ -397,8 +397,6 @@
         const data = await res.json();
         
         epList.innerHTML = '';
-
-        // SISTEM FALLBACK EPISODE: Jika TMDB error dan tidak mengirim data episode
         if (data.episodes && data.episodes.length > 0) {
           data.episodes.forEach(ep => {
             const btn = document.createElement('button');
@@ -413,20 +411,10 @@
             };
             epList.appendChild(btn);
           });
+          refreshIframe();
         } else {
-          // MEMBUAT TOMBOL MANUAL AGAR TIDAK BLANK
-          const btn = document.createElement('button');
-          btn.className = `btn-ep active`;
-          btn.innerText = `Ep 1 (Fallback)`;
-          btn.onclick = () => {
-              activeEpisode = 1;
-              document.getElementById('adShield').classList.remove('hidden');
-              refreshIframe();
-          };
-          epList.appendChild(btn);
+          epList.innerHTML = '<p style="color:#fff; padding:10px;">Episode belum tersedia.</p>';
         }
-        
-        refreshIframe();
       } catch (e) {
         epList.innerHTML = '<p style="color:#ef4444; padding:10px;">Gagal memuat daftar episode.</p>';
       }
@@ -444,16 +432,16 @@
       const iframe = document.getElementById('video-frame');
       let url = '';
       
-      /* SERVER ANTI-BLOKIR (Disesuaikan khusus untuk web hosting gratisan seperti Github Pages) */
+      /* PERBAIKAN 3: SERVER ANTI-CRASH - Menghindari server dengan iklan berat yang membuat Chrome Hang */
       if (isMovie) {
         if (activeServer === 1) url = `https://player.autoembed.cc/embed/movie/${activeId}`;
         if (activeServer === 2) url = `https://embed.su/embed/movie/${activeId}`;
-        if (activeServer === 3) url = `https://vidlink.pro/movie/${activeId}`;
+        if (activeServer === 3) url = `https://vidsrc.cc/v2/embed/movie/${activeId}`;
         if (activeServer === 4) url = `https://multiembed.mov/?video_id=${activeId}&tmdb=1`;
       } else {
         if (activeServer === 1) url = `https://player.autoembed.cc/embed/tv/${activeId}/${activeSeason}/${activeEpisode}`;
         if (activeServer === 2) url = `https://embed.su/embed/tv/${activeId}/${activeSeason}/${activeEpisode}`;
-        if (activeServer === 3) url = `https://vidlink.pro/tv/${activeId}/${activeSeason}/${activeEpisode}`;
+        if (activeServer === 3) url = `https://vidsrc.cc/v2/embed/tv/${activeId}/${activeSeason}/${activeEpisode}`;
         if (activeServer === 4) url = `https://multiembed.mov/?video_id=${activeId}&tmdb=1&s=${activeSeason}&e=${activeEpisode}`;
       }
       iframe.src = url;
